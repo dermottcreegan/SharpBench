@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>SharpBench judges: sandboxed compile-and-test judge (delegates to SharpBench.Sandbox) and weighted composite judge, built on NetEval.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- TODO: swap for <PackageReference Include="NetEval.Core" /> once NetEval is on NuGet. -->
+    <ProjectReference Include="..\..\..\NetEval\src\NetEval.Core\NetEval.Core.csproj" />
+  </ItemGroup>
+
+</Project>

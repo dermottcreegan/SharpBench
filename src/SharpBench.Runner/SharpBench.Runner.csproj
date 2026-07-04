@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- CS9057: OllamaSharp's analyzer targets a newer Roslyn than the .NET 8 SDK ships.
+         ExcludeAssets/IncludeAssets on the PackageReference don't stop the SDK from loading
+         it anyway, and we don't use OllamaSharp's source-generated helpers, so the analyzer
+         running (or not) has no effect on this build. -->
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" Version="12.34.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.7.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
+    <PackageReference Include="Mscc.GenerativeAI.Microsoft" Version="3.1.0" />
+    <PackageReference Include="OllamaSharp" Version="5.4.25" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpBench.Judging\SharpBench.Judging.csproj" />
+    <!-- Build-order only: the sandbox is launched as a child process, not linked. -->
+    <ProjectReference Include="..\SharpBench.Sandbox\SharpBench.Sandbox.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>
