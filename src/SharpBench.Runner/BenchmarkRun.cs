@@ -19,6 +19,12 @@ public static class BenchmarkRun
 
     private const double FunctionalWeight = 0.7;
     private const double IdiomWeight = 0.3;
+    /// <summary>
+    /// Overall pass bar for the weighted composite score. The functional judge is
+    /// required outright; the idiom judge only moves the score, so a perfect
+    /// functional result (0.7) plus a mediocre idiom score still clears the bar.
+    /// </summary>
+    private const double PassThreshold = 0.7;
 
     /// <param name="modelLabel">Human-readable model name for the results file (e.g. "claude-sonnet-5").</param>
     /// <param name="contestant">Chat client for the model under test.</param>
@@ -37,23 +43,31 @@ public static class BenchmarkRun
             // TODO(runs): wrap in 3 generations per task and report mean pass rate,
             // mirroring NetEval's Runs/PassThreshold semantics.
             var judge = new CompositeJudge(
-                (new RoslynTestJudge(task.HiddenTestsSource), FunctionalWeight),
-                (idiomJudge, IdiomWeight));
+                PassThreshold,
+                (new RoslynTestJudge(task.HiddenTestsSource), FunctionalWeight, Required: true),
+                (idiomJudge, IdiomWeight, Required: false));
 
+            UsageDetails? sutUsage = null;
             var report = await new EvalRunner(judge).RunAsync(
                 [new EvalCase(task.Prompt, task.Criteria)],
-                (input, ct) => GenerateAsync(contestant, input, ct),
+                async (input, ct) =>
+                {
+                    var (text, usage) = await GenerateAsync(contestant, input, ct);
+                    sutUsage = usage;
+                    return text;
+                },
                 cancellationToken: cancellationToken);
 
             var result = report.Results.Single();
-            await AppendResultAsync(resultsPath, modelLabel, task, result, cancellationToken);
+            await AppendResultAsync(resultsPath, modelLabel, task, result, sutUsage, cancellationToken);
             Console.WriteLine(
                 $"[{modelLabel}] {task.Category}/{task.Id}: " +
                 $"{(result.Verdict.Passed ? "PASS" : "FAIL")} (score {result.Verdict.Score:0.00}, sut {result.SutLatency.TotalMilliseconds:0} ms)");
         }
     }
 
-    private static async Task<string> GenerateAsync(IChatClient contestant, string prompt, CancellationToken ct)
+    private static async Task<(string Text, UsageDetails? Usage)> GenerateAsync(
+        IChatClient contestant, string prompt, CancellationToken ct)
     {
         List<ChatMessage> messages =
         [
@@ -63,14 +77,17 @@ public static class BenchmarkRun
         // Cap output uniformly across providers (Claude bakes its cap into the client;
         // OpenAI/Gemini read it from ChatOptions).
         var options = new ChatOptions { MaxOutputTokens = ChatClientFactory.MaxOutputTokens };
-        // TODO(cost): capture response.Usage here so the results post can report
-        // cost-per-task for the contestant, not just the judge.
         var response = await contestant.GetResponseAsync(messages, options, ct);
-        return response.Text;
+        return (response.Text, response.Usage);
     }
 
     private static async Task AppendResultAsync(
-        string resultsPath, string modelLabel, BenchTask task, EvalCaseResult result, CancellationToken ct)
+        string resultsPath,
+        string modelLabel,
+        BenchTask task,
+        EvalCaseResult result,
+        UsageDetails? sutUsage,
+        CancellationToken ct)
     {
         var line = JsonSerializer.Serialize(new
         {
@@ -81,6 +98,10 @@ public static class BenchmarkRun
             score = result.Verdict.Score,
             reasoning = result.Verdict.Reasoning,
             sutLatencyMs = (int)result.SutLatency.TotalMilliseconds,
+            // Token counts, not dollars: pricing changes; the results post can price
+            // them at publication time. Null when the provider reports no usage.
+            sutInputTokens = sutUsage?.InputTokenCount,
+            sutOutputTokens = sutUsage?.OutputTokenCount,
             output = result.Output,
             timestampUtc = DateTime.UtcNow,
         });
