@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out SharpBench
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: SharpBench
 
@@ -18,14 +18,14 @@ jobs:
       # workspace. Defaults to <same owner>/NetEval; if NetEval is private, add a
       # PAT with repo read access as the NETEVAL_TOKEN secret and uncomment `token`.
       - name: Check out NetEval (sibling)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/NetEval
           path: NetEval
           # token: ${{ secrets.NETEVAL_TOKEN }}
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
