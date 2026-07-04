@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/dermottcreegan/SharpBench/actions/workflows/ci.yml/badge.svg)](https://github.com/dermottcreegan/SharpBench/actions/workflows/ci.yml)
 
-**Which LLM writes the best C#?** A reproducible benchmark of frontier models on real-world C# tasks — async correctness, LINQ pitfalls, spans, nullability, and legacy refactoring — built on NetEval, a sibling project in the same org.
+**Which LLM writes the best C#?** A reproducible benchmark of frontier models on real-world C# tasks — async correctness, LINQ pitfalls, spans, nullability, and legacy refactoring — built on [NetEval](https://github.com/dermottcreegan/NetEval), an LLM eval framework for .NET by the same author.
 
 ## How it works
 
@@ -11,7 +11,9 @@ Every model gets the same system prompt and the same task set — 14 tasks so fa
 1. **Functional (weight 0.7, objective)** — `RoslynTestJudge` compiles the model's code together with a hidden xUnit test file and runs the tests. Score = fraction of hidden tests passing.
 2. **Idiom (weight 0.3, LLM-judged)** — NetEval's `ChatClientJudge` scores the code against a per-task style rubric. One fixed judge model scores every contestant, and all judge transcripts are published with the results.
 
-Latency is measured per generation; raw per-task outputs and verdicts are committed under `results/` as JSONL.
+A task counts as **passed** when all hidden tests pass *and* the weighted score reaches 0.7. The idiom judge is advisory: it moves the score (and the rankings), but a style nitpick alone cannot veto a functionally correct solution.
+
+Latency and contestant token usage are measured per generation; raw per-task outputs and verdicts are committed under `results/` as JSONL.
 
 ## Results
 
@@ -19,11 +21,9 @@ Latency is measured per generation; raw per-task outputs and verdicts are commit
 
 ## Run it yourself
 
-SharpBench.Judging references NetEval by a sibling-repo path (`..\..\..\NetEval\...`), so clone
-NetEval next to this repo first:
+SharpBench consumes [NetEval](https://github.com/dermottcreegan/NetEval) from NuGet, so a clone builds standalone:
 
 ```
-git clone https://github.com/dermottcreegan/NetEval ../NetEval   # must sit beside SharpBench, not inside it
 dotnet run --project src/SharpBench.Runner                    # list the task inventory (no keys needed)
 dotnet run --project src/SharpBench.Runner -- --model <label> # benchmark one model
 ```
@@ -52,7 +52,7 @@ with a hard wall-clock timeout, so a runaway or hostile answer can't wedge the h
 - Hidden tests stop being hidden the moment this repo is public; future models may train on them. The task set is versioned (`tasks-v1`) so it can be rotated without invalidating old results.
 - The idiom layer is LLM-as-judge and inherits that bias; that's why it's the minority weight and fully transcript-published.
 - A candidate's code runs in a disposable `SharpBench.Sandbox` child process (compiled fresh per candidate, loaded into a collectible `AssemblyLoadContext`), and the parent kills the whole process tree on a hard wall-clock timeout — so a hanging or `Environment.Exit()`-calling candidate can't wedge the harness. That timeout-and-kill is the only boundary, though: nothing inside the sandbox process currently blocks filesystem or network access, so it isn't safe to point at untrusted, adversarial submissions without an added OS-level boundary (container, restricted user, no network).
-- Overall `Passed` requires *both* judges to pass — an idiom-judge nitpick can flip a functionally-correct solution to "failed" despite the 0.7/0.3 weighting. Worth revisiting if that surprises readers of the results.
+- The idiom layer can still swing rankings even though it can no longer veto a pass: a functionally perfect solution scores between 0.70 and 1.00 depending entirely on one LLM's style opinion. Read the score column with that in mind.
 
 ## License
 

@@ -8,8 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- TODO: swap for <PackageReference Include="NetEval.Core" /> once NetEval is on NuGet. -->
-    <ProjectReference Include="..\..\..\NetEval\src\NetEval.Core\NetEval.Core.csproj" />
+    <PackageReference Include="NetEval.Core" Version="0.1.0-alpha.1" />
   </ItemGroup>
 
 </Project>
