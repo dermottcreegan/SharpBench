@@ -10,19 +10,6 @@ jobs:
     steps:
       - name: Check out SharpBench
         uses: actions/checkout@v6
-        with:
-          path: SharpBench
-
-      # SharpBench.Judging references NetEval by a sibling-repo path
-      # (..\..\..\NetEval\...), so NetEval must sit next to SharpBench in the
-      # workspace. Defaults to <same owner>/NetEval; if NetEval is private, add a
-      # PAT with repo read access as the NETEVAL_TOKEN secret and uncomment `token`.
-      - name: Check out NetEval (sibling)
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ github.repository_owner }}/NetEval
-          path: NetEval
-          # token: ${{ secrets.NETEVAL_TOKEN }}
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -30,9 +17,9 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Build
-        run: dotnet build SharpBench/SharpBench.sln -c Release
+        run: dotnet build SharpBench.sln -c Release
 
       # Runs the task-contract gate: every task's reference.cs must pass its hidden
       # tests and its wrong.cs must fail, through the SharpBench.Sandbox process.
       - name: Test
-        run: dotnet test SharpBench/SharpBench.sln -c Release --no-build
+        run: dotnet test SharpBench.sln -c Release --no-build
