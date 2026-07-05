@@ -20,8 +20,13 @@ namespace SharpBench.Runner;
 /// </summary>
 public static class ChatClientFactory
 {
-    /// <summary>Headroom for a whole C# file; contestants answer with one complete source file.</summary>
-    public const int MaxOutputTokens = 8192;
+    /// <summary>
+    /// Headroom for a whole C# file; contestants answer with one complete source file.
+    /// Sized well above what a file needs because thinking models (e.g. Gemini 2.5 Pro)
+    /// bill reasoning tokens against this same cap — 8K was tight enough that one
+    /// contestant spent the whole budget thinking and emitted zero visible code.
+    /// </summary>
+    public const int MaxOutputTokens = 16384;
 
     public static IChatClient Create(string label)
     {

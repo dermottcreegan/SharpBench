@@ -13,6 +13,7 @@ public static class BenchmarkRun
         """
         You are an expert C# developer. Answer with a single, complete, compilable C# file.
         Include every using directive you need. Do not use markdown code fences.
+        Declare all types in the global namespace; do not wrap them in a namespace declaration.
         Do not include a Main method or top-level statements unless the task asks for one.
         Target .NET 8 / C# 12.
         """;
@@ -78,7 +79,32 @@ public static class BenchmarkRun
         // OpenAI/Gemini read it from ChatOptions).
         var options = new ChatOptions { MaxOutputTokens = ChatClientFactory.MaxOutputTokens };
         var response = await contestant.GetResponseAsync(messages, options, ct);
-        return (response.Text, response.Usage);
+        return (StripMarkdownCodeFence(response.Text), response.Usage);
+    }
+
+    /// <summary>
+    /// Some models wrap their answer in a ```csharp fence despite the system prompt
+    /// asking them not to. Left in place, the backticks are a hard compile error
+    /// (CS1056) unrelated to code quality, so strip a wrapping fence if present.
+    /// A no-op when the response has no fence.
+    /// </summary>
+    private static string StripMarkdownCodeFence(string text)
+    {
+        var trimmed = text.Trim();
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+            return text;
+
+        var openingFenceEnd = trimmed.IndexOf('\n');
+        if (openingFenceEnd < 0)
+            return text;
+
+        var withoutOpeningFence = trimmed[(openingFenceEnd + 1)..];
+
+        var closingFenceStart = withoutOpeningFence.LastIndexOf("```", StringComparison.Ordinal);
+        if (closingFenceStart < 0)
+            return withoutOpeningFence;
+
+        return withoutOpeningFence[..closingFenceStart].TrimEnd();
     }
 
     private static async Task AppendResultAsync(

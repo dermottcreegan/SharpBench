@@ -4,13 +4,23 @@ using SharpBench.Runner;
 // Usage:
 //   dotnet run                          -- list the task inventory (no API keys needed)
 //   dotnet run -- --model <label>       -- run the benchmark for one model
+//   dotnet run -- --report              -- markdown leaderboard from results/ (no keys needed)
 //
 // Model labels: bare frontier IDs (claude-sonnet-5, gpt-4o, gemini-2.5-pro), an
 // explicit provider:model prefix (openai:gpt-4o), or ollama:<model>. Keys come from
-// ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY. See ChatClientFactory.
+// ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY, either as real environment
+// variables or dropped into a repo-root .env file (see .env.example). See ChatClientFactory.
 
 var repoRoot = FindRepoRoot();
+LoadDotEnv(repoRoot);
 var tasks = TaskLoader.LoadAll(Path.Combine(repoRoot, "tasks"));
+
+if (args.Contains("--report"))
+{
+    Console.WriteLine(Leaderboard.Render(
+        Path.Combine(repoRoot, "results"), tasks, Path.Combine(repoRoot, "pricing.json")));
+    return;
+}
 
 Console.WriteLine($"SharpBench: {tasks.Count} tasks in {tasks.Select(t => t.Category).Distinct().Count()} categories");
 foreach (var group in tasks.GroupBy(t => t.Category))
@@ -49,6 +59,31 @@ static IChatClient CreateChatClient(string modelLabel)
     }
 
     return ChatClientFactory.Create(modelLabel);
+}
+
+static void LoadDotEnv(string repoRoot)
+{
+    var path = Path.Combine(repoRoot, ".env");
+    if (!File.Exists(path))
+        return;
+
+    foreach (var line in File.ReadAllLines(path))
+    {
+        var trimmed = line.Trim();
+        if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+            continue;
+
+        var separator = trimmed.IndexOf('=');
+        if (separator < 0)
+            continue;
+
+        var key = trimmed[..separator].Trim();
+        var value = trimmed[(separator + 1)..].Trim().Trim('"');
+
+        // Real environment variables win over the .env file.
+        if (Environment.GetEnvironmentVariable(key) is null)
+            Environment.SetEnvironmentVariable(key, value);
+    }
 }
 
 static string FindRepoRoot()
