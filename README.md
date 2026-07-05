@@ -37,7 +37,9 @@ Three frontier models pass 14/14; cost and latency separate them sharply. Gemini
 the score column but spends ~97K output tokens (mostly reasoning) — ~15× gpt-4o's price for
 roughly the same pass rate. Claude Opus 4.8 dropped `generics/generic-sum` by calling
 `ArgumentNullException.ThrowIfNull` without `using System;` in 2 of 3 generations — candidates
-compile without implicit usings, and the contract requires every using directive. That's the
+compile without implicit usings, and the contract requires every using directive. It's a one-keystroke
+fix in an IDE, but a hard failure for any pipeline that compiles model output directly — the gap
+between "looks right" and "compiles" is precisely what this benchmark measures. It's also the
 multi-generation protocol working as intended: the earlier single-generation run happened to
 sample the one generation where the directive was present.
 
