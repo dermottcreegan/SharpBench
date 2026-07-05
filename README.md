@@ -17,7 +17,41 @@ Latency and contestant token usage are measured per generation; raw per-task out
 
 ## Results
 
-*Coming with the first full run.*
+First full run, 2026-07-05 — 14 tasks, idiom judge `claude-opus-4-8`. Regenerate with
+`dotnet run --project src/SharpBench.Runner -- --report`.
+
+| Model | Passed | Mean score | Mean latency | Tokens in / out | Cost / run |
+|---|---|---|---|---|---|
+| claude-opus-4-8 | 14/14 | 0.994 | 3.0 s | 3,934 / 2,354 | $0.079 |
+| gemini-2.5-pro | 14/14 | 0.993 | 17.2 s | 3,053 / 34,106 | $0.345 |
+| claude-sonnet-5 | 14/14 | 0.989 | 3.0 s | 3,934 / 3,104 | $0.058 |
+| gpt-4o | 14/14 | 0.978 | 1.5 s | 2,723 / 1,707 | $0.024 |
+| ollama:qwen2.5-coder:7b | 11/14 | 0.859 | 14.6 s | 2,743 / 1,687 | $0 (local) |
+
+*Cost prices the full run at list per-MTok rates from [`pricing.json`](pricing.json) (as of 2026-07-05).*
+
+The four frontier models all pass 14/14, so the ranking comes down to idiom-judge decimals —
+but cost and latency separate them sharply: Gemini 2.5 Pro burned 34K output tokens (mostly
+reasoning) for the same pass rate gpt-4o achieved with 1.7K, making it 4–14× the price per run.
+
+### Mean score by category
+
+| Category | claude-opus-4-8 | gemini-2.5-pro | claude-sonnet-5 | gpt-4o | ollama:qwen2.5-coder:7b |
+|---|---|---|---|---|---|
+| async | 0.97 | 0.99 | 0.96 | 0.96 | 1.00 |
+| concurrency | 0.99 | 0.99 | 0.99 | 0.99 | 0.54 |
+| generics | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| idiom | 1.00 | 1.00 | 1.00 | 1.00 | 0.96 |
+| linq | 1.00 | 0.99 | 0.96 | 0.82 | 1.00 |
+| nullability | 0.99 | 0.99 | 0.99 | 0.99 | 0.93 |
+| refactoring | 1.00 | 0.99 | 1.00 | 1.00 | 0.72 |
+| spans | 0.99 | 0.99 | 0.99 | 0.98 | 0.87 |
+
+### Failed tasks
+
+- ollama:qwen2.5-coder:7b: concurrency/channel-sum (score 0.23)
+- ollama:qwen2.5-coder:7b: refactoring/loop-to-linq (score 0.77)
+- ollama:qwen2.5-coder:7b: refactoring/modernize-describe (score 0.68)
 
 ## Run it yourself
 
