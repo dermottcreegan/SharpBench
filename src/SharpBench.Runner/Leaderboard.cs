@@ -4,7 +4,9 @@ using System.Text.Json.Serialization;
 
 namespace SharpBench.Runner;
 
-/// <summary>One line of a results JSONL file, as written by <see cref="BenchmarkRun"/>.</summary>
+/// <summary>One line of a results JSONL file, as written by <see cref="BenchmarkRun"/> —
+/// one generation of one task. <paramref name="Generation"/> defaults to 1 so files
+/// written before multi-generation runs still load.</summary>
 public sealed record ResultLine(
     string Model,
     string Category,
@@ -14,7 +16,8 @@ public sealed record ResultLine(
     int SutLatencyMs,
     long? SutInputTokens,
     long? SutOutputTokens,
-    DateTime TimestampUtc);
+    DateTime TimestampUtc,
+    int Generation = 1);
 
 /// <summary>Per-model list price in dollars per million tokens, one entry of <see cref="PricingFile"/>.</summary>
 public sealed record ModelPricing(decimal Input, decimal Output, string? Note);
@@ -53,13 +56,18 @@ public static class Leaderboard
         var models =
             (from r in results
              group r by r.Model into byModel
-             let passed = byModel.Count(r => r.Passed)
+             // A task passes when at least half its generations pass: sampling is
+             // stochastic, so majority-of-N beats a single lucky (or unlucky) draw.
+             let byTask = byModel.GroupBy(r => (r.Category, r.Task)).ToList()
+             let passed = byTask.Count(t => t.Count(r => r.Passed) * 2 >= t.Count())
              let meanScore = byModel.Average(r => r.Score)
              orderby meanScore descending, passed descending
              select new
              {
                  Model = byModel.Key,
                  Rows = byModel.ToList(),
+                 TasksRun = byTask.Count,
+                 Generations = FormatGenerations(byTask),
                  Passed = passed,
                  MeanScore = meanScore,
                  MeanLatencyMs = byModel.Average(r => r.SutLatencyMs),
@@ -71,22 +79,23 @@ public static class Leaderboard
         var sb = new StringBuilder();
         sb.AppendLine("## Leaderboard");
         sb.AppendLine();
-        sb.AppendLine("| Model | Passed | Mean score | Mean latency | Tokens in / out | Cost / run |");
-        sb.AppendLine("|---|---|---|---|---|---|");
+        sb.AppendLine("| Model | Passed | Gens/task | Mean score | Mean latency | Tokens in / out | Cost / run |");
+        sb.AppendLine("|---|---|---|---|---|---|---|");
         foreach (var m in models)
         {
-            var scored = m.Rows.Count == taskCount ? "" : $" of {m.Rows.Count} run";
+            var scored = m.TasksRun == taskCount ? "" : $" of {m.TasksRun} run";
             sb.AppendLine(
-                $"| {m.Model} | {m.Passed}/{taskCount}{scored} | {m.MeanScore:0.000} | " +
+                $"| {m.Model} | {m.Passed}/{taskCount}{scored} | {m.Generations} | {m.MeanScore:0.000} | " +
                 $"{m.MeanLatencyMs / 1000:0.0} s | {Format(m.InputTokens)} / {Format(m.OutputTokens)} | " +
                 $"{FormatCost(pricing, m.Model, m.InputTokens, m.OutputTokens)} |");
         }
 
+        sb.AppendLine();
+        sb.AppendLine(
+            "*A task passes when at least half its generations pass; score and latency average over " +
+            "all generations. Mixed Gens/task counts (e.g. \"1–3\") mean the rows aren't comparable — rerun.*");
         if (pricing is not null)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"*Cost prices the full run at list per-MTok rates from `pricing.json` (as of {pricing.AsOf}).*");
-        }
+            sb.AppendLine($"*Cost covers every generation, at list per-MTok rates from `pricing.json` (as of {pricing.AsOf}).*");
 
         sb.AppendLine();
         sb.AppendLine("## Mean score by category");
@@ -108,21 +117,38 @@ public static class Leaderboard
         }
 
         // Failures deserve a callout: the tables above only show aggregates.
-        var failures = results.Where(r => !r.Passed).OrderBy(r => r.Model).ThenBy(r => r.Category).ToList();
+        var failures =
+            (from r in results
+             group r by (r.Model, r.Category, r.Task) into byTask
+             let passedGens = byTask.Count(r => r.Passed)
+             where passedGens * 2 < byTask.Count()
+             orderby byTask.Key.Model, byTask.Key.Category, byTask.Key.Task
+             select new
+             {
+                 byTask.Key.Model,
+                 byTask.Key.Category,
+                 byTask.Key.Task,
+                 PassedGens = passedGens,
+                 Gens = byTask.Count(),
+                 MeanScore = byTask.Average(r => r.Score),
+             })
+            .ToList();
         if (failures.Count > 0)
         {
             sb.AppendLine();
             sb.AppendLine("## Failed tasks");
             sb.AppendLine();
             foreach (var f in failures)
-                sb.AppendLine($"- {f.Model}: {f.Category}/{f.Task} (score {f.Score:0.00})");
+                sb.AppendLine(
+                    $"- {f.Model}: {f.Category}/{f.Task} " +
+                    $"({f.PassedGens}/{f.Gens} generations passed, mean score {f.MeanScore:0.00})");
         }
 
         return sb.ToString();
     }
 
     /// <summary>Reads every *.jsonl under <paramref name="resultsRoot"/> (recursively, so monthly
-    /// subfolders are picked up) and keeps the latest line per (model, category, task).</summary>
+    /// subfolders are picked up) and keeps the latest line per (model, category, task, generation).</summary>
     private static IReadOnlyList<ResultLine> LoadLatest(string resultsRoot)
     {
         if (!Directory.Exists(resultsRoot))
@@ -135,9 +161,19 @@ public static class Leaderboard
             select JsonSerializer.Deserialize<ResultLine>(line, JsonOptions)!;
 
         return lines
-            .GroupBy(r => (r.Model, r.Category, r.Task))
+            .GroupBy(r => (r.Model, r.Category, r.Task, r.Generation))
             .Select(g => g.OrderBy(r => r.TimestampUtc).Last())
             .ToList();
+    }
+
+    /// <summary>"3" when every task ran the same number of generations, else a "1–3" range
+    /// — a mixed count means a partial rerun polluted the table and the model needs a
+    /// clean full run before its row is comparable.</summary>
+    private static string FormatGenerations(IEnumerable<IGrouping<(string, string), ResultLine>> byTask)
+    {
+        var counts = byTask.Select(t => t.Count()).ToList();
+        var (min, max) = (counts.Min(), counts.Max());
+        return min == max ? min.ToString() : $"{min}–{max}";
     }
 
     private static long? SumOrNull(IEnumerable<ResultLine> rows, Func<ResultLine, long?> selector)

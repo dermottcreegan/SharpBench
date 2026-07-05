@@ -30,40 +30,44 @@ public static class BenchmarkRun
     /// <param name="modelLabel">Human-readable model name for the results file (e.g. "claude-sonnet-5").</param>
     /// <param name="contestant">Chat client for the model under test.</param>
     /// <param name="idiomJudge">LLM judge for the style layer — one fixed judge model for all contestants.</param>
-    /// <param name="resultsPath">JSONL file to append one result line per task to.</param>
+    /// <param name="resultsPath">JSONL file to append one result line per generation to.</param>
+    /// <param name="runs">Generations per task. Sampling is stochastic, so one generation is an
+    /// anecdote; the leaderboard counts a task as passed when at least half its generations pass.</param>
     public static async Task RunModelAsync(
         string modelLabel,
         IChatClient contestant,
         IJudge idiomJudge,
         IReadOnlyList<BenchTask> tasks,
         string resultsPath,
+        int runs,
         CancellationToken cancellationToken = default)
     {
         foreach (var task in tasks)
         {
-            // TODO(runs): wrap in 3 generations per task and report mean pass rate,
-            // mirroring NetEval's Runs/PassThreshold semantics.
             var judge = new CompositeJudge(
                 PassThreshold,
                 (new RoslynTestJudge(task.HiddenTestsSource), FunctionalWeight, Required: true),
                 (idiomJudge, IdiomWeight, Required: false));
 
-            UsageDetails? sutUsage = null;
-            var report = await new EvalRunner(judge).RunAsync(
-                [new EvalCase(task.Prompt, task.Criteria)],
-                async (input, ct) =>
-                {
-                    var (text, usage) = await GenerateAsync(contestant, input, ct);
-                    sutUsage = usage;
-                    return text;
-                },
-                cancellationToken: cancellationToken);
+            for (var generation = 1; generation <= runs; generation++)
+            {
+                UsageDetails? sutUsage = null;
+                var report = await new EvalRunner(judge).RunAsync(
+                    [new EvalCase(task.Prompt, task.Criteria)],
+                    async (input, ct) =>
+                    {
+                        var (text, usage) = await GenerateAsync(contestant, input, ct);
+                        sutUsage = usage;
+                        return text;
+                    },
+                    cancellationToken: cancellationToken);
 
-            var result = report.Results.Single();
-            await AppendResultAsync(resultsPath, modelLabel, task, result, sutUsage, cancellationToken);
-            Console.WriteLine(
-                $"[{modelLabel}] {task.Category}/{task.Id}: " +
-                $"{(result.Verdict.Passed ? "PASS" : "FAIL")} (score {result.Verdict.Score:0.00}, sut {result.SutLatency.TotalMilliseconds:0} ms)");
+                var result = report.Results.Single();
+                await AppendResultAsync(resultsPath, modelLabel, task, generation, result, sutUsage, cancellationToken);
+                Console.WriteLine(
+                    $"[{modelLabel}] {task.Category}/{task.Id} gen {generation}/{runs}: " +
+                    $"{(result.Verdict.Passed ? "PASS" : "FAIL")} (score {result.Verdict.Score:0.00}, sut {result.SutLatency.TotalMilliseconds:0} ms)");
+            }
         }
     }
 
@@ -111,6 +115,7 @@ public static class BenchmarkRun
         string resultsPath,
         string modelLabel,
         BenchTask task,
+        int generation,
         EvalCaseResult result,
         UsageDetails? sutUsage,
         CancellationToken ct)
@@ -120,6 +125,7 @@ public static class BenchmarkRun
             model = modelLabel,
             category = task.Category,
             task = task.Id,
+            generation,
             passed = result.Verdict.Passed,
             score = result.Verdict.Score,
             reasoning = result.Verdict.Reasoning,

@@ -13,22 +13,26 @@ Every model gets the same system prompt and the same task set — 14 tasks so fa
 
 A task counts as **passed** when all hidden tests pass *and* the weighted score reaches 0.7. The idiom judge is advisory: it moves the score (and the rankings), but a style nitpick alone cannot veto a functionally correct solution.
 
+Sampling is stochastic, so each task is generated **3 times** by default (`--runs <n>` overrides; use `--runs 1` for cheap smoke runs). A task counts as passed when at least half its generations pass; scores average over all generations.
+
 Latency and contestant token usage are measured per generation; raw per-task outputs and verdicts are committed under `results/` as JSONL.
 
 ## Results
 
-First full run, 2026-07-05 — 14 tasks, idiom judge `claude-opus-4-8`. Regenerate with
+First full run, 2026-07-05 — 14 tasks, idiom judge `claude-opus-4-8`, one generation per task
+(this run predates the 3-generation protocol; a 3-gen rerun is next). Regenerate with
 `dotnet run --project src/SharpBench.Runner -- --report`.
 
-| Model | Passed | Mean score | Mean latency | Tokens in / out | Cost / run |
-|---|---|---|---|---|---|
-| claude-opus-4-8 | 14/14 | 0.994 | 3.0 s | 3,934 / 2,354 | $0.079 |
-| gemini-2.5-pro | 14/14 | 0.993 | 17.2 s | 3,053 / 34,106 | $0.345 |
-| claude-sonnet-5 | 14/14 | 0.989 | 3.0 s | 3,934 / 3,104 | $0.058 |
-| gpt-4o | 14/14 | 0.978 | 1.5 s | 2,723 / 1,707 | $0.024 |
-| ollama:qwen2.5-coder:7b | 11/14 | 0.859 | 14.6 s | 2,743 / 1,687 | $0 (local) |
+| Model | Passed | Gens/task | Mean score | Mean latency | Tokens in / out | Cost / run |
+|---|---|---|---|---|---|---|
+| claude-opus-4-8 | 14/14 | 1 | 0.994 | 3.0 s | 3,934 / 2,354 | $0.079 |
+| gemini-2.5-pro | 14/14 | 1 | 0.993 | 17.2 s | 3,053 / 34,106 | $0.345 |
+| claude-sonnet-5 | 14/14 | 1 | 0.989 | 3.0 s | 3,934 / 3,104 | $0.058 |
+| gpt-4o | 14/14 | 1 | 0.978 | 1.5 s | 2,723 / 1,707 | $0.024 |
+| ollama:qwen2.5-coder:7b | 11/14 | 1 | 0.859 | 14.6 s | 2,743 / 1,687 | $0 (local) |
 
-*Cost prices the full run at list per-MTok rates from [`pricing.json`](pricing.json) (as of 2026-07-05).*
+*A task passes when at least half its generations pass; score and latency average over all generations.*
+*Cost covers every generation, at list per-MTok rates from [`pricing.json`](pricing.json) (as of 2026-07-05).*
 
 The four frontier models all pass 14/14, so the ranking comes down to idiom-judge decimals —
 but cost and latency separate them sharply: Gemini 2.5 Pro burned 34K output tokens (mostly
@@ -49,9 +53,9 @@ reasoning) for the same pass rate gpt-4o achieved with 1.7K, making it 4–14× 
 
 ### Failed tasks
 
-- ollama:qwen2.5-coder:7b: concurrency/channel-sum (score 0.23)
-- ollama:qwen2.5-coder:7b: refactoring/loop-to-linq (score 0.77)
-- ollama:qwen2.5-coder:7b: refactoring/modernize-describe (score 0.68)
+- ollama:qwen2.5-coder:7b: concurrency/channel-sum (0/1 generations passed, mean score 0.23)
+- ollama:qwen2.5-coder:7b: refactoring/loop-to-linq (0/1 generations passed, mean score 0.77)
+- ollama:qwen2.5-coder:7b: refactoring/modernize-describe (0/1 generations passed, mean score 0.68)
 
 ## Run it yourself
 
@@ -59,7 +63,9 @@ SharpBench consumes [NetEval](https://github.com/dermottcreegan/NetEval) from Nu
 
 ```
 dotnet run --project src/SharpBench.Runner                    # list the task inventory (no keys needed)
-dotnet run --project src/SharpBench.Runner -- --model <label> # benchmark one model
+dotnet run --project src/SharpBench.Runner -- --model <label> # benchmark one model (3 generations/task)
+dotnet run --project src/SharpBench.Runner -- --model <label> --runs 1  # cheap single-generation smoke run
+dotnet run --project src/SharpBench.Runner -- --report        # markdown leaderboard (no keys needed)
 ```
 
 `<label>` selects the provider. Frontier model IDs are self-identifying; Ollama uses an explicit prefix:

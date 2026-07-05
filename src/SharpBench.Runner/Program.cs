@@ -4,6 +4,7 @@ using SharpBench.Runner;
 // Usage:
 //   dotnet run                          -- list the task inventory (no API keys needed)
 //   dotnet run -- --model <label>       -- run the benchmark for one model
+//   dotnet run -- --model <label> --runs <n>  -- override generations per task (default 3)
 //   dotnet run -- --report              -- markdown leaderboard from results/ (no keys needed)
 //
 // Model labels: bare frontier IDs (claude-sonnet-5, gpt-4o, gemini-2.5-pro), an
@@ -34,6 +35,21 @@ if (modelIndex < 0 || modelIndex + 1 >= args.Length)
 }
 
 var modelLabel = args[modelIndex + 1];
+
+// Generations per task. 3 is the published protocol (a task passes when at least half
+// its generations pass); --runs 1 keeps development smoke runs cheap. Published tables
+// should never mix counts — the leaderboard flags models whose counts differ.
+var runs = 3;
+var runsIndex = Array.IndexOf(args, "--runs");
+if (runsIndex >= 0)
+{
+    if (runsIndex + 1 >= args.Length || !int.TryParse(args[runsIndex + 1], out runs) || runs < 1)
+    {
+        Console.Error.WriteLine("--runs needs a positive integer (generations per task).");
+        return;
+    }
+}
+
 var contestant = CreateChatClient(modelLabel);
 // One fixed judge model for every contestant; publish the judge transcripts with the results.
 var idiomJudge = new NetEval.ChatClientJudge(CreateChatClient("judge"));
@@ -44,7 +60,7 @@ Directory.CreateDirectory(resultsDir);
 var fileLabel = string.Join("-", modelLabel.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
 var resultsPath = Path.Combine(resultsDir, $"{fileLabel}.jsonl");
 
-await BenchmarkRun.RunModelAsync(modelLabel, contestant, idiomJudge, tasks, resultsPath);
+await BenchmarkRun.RunModelAsync(modelLabel, contestant, idiomJudge, tasks, resultsPath, runs);
 Console.WriteLine($"\nDone. Raw results: {resultsPath}");
 
 static IChatClient CreateChatClient(string modelLabel)
