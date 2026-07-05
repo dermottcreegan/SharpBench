@@ -19,43 +19,47 @@ Latency and contestant token usage are measured per generation; raw per-task out
 
 ## Results
 
-First full run, 2026-07-05 — 14 tasks, idiom judge `claude-opus-4-8`, one generation per task
-(this run predates the 3-generation protocol; a 3-gen rerun is next). Regenerate with
-`dotnet run --project src/SharpBench.Runner -- --report`.
+Full run, 2026-07-05 — 14 tasks × 3 generations per model, idiom judge `claude-opus-4-8`.
+Regenerate with `dotnet run --project src/SharpBench.Runner -- --report`.
 
 | Model | Passed | Gens/task | Mean score | Mean latency | Tokens in / out | Cost / run |
 |---|---|---|---|---|---|---|
-| claude-opus-4-8 | 14/14 | 1 | 0.994 | 3.0 s | 3,934 / 2,354 | $0.079 |
-| gemini-2.5-pro | 14/14 | 1 | 0.993 | 17.2 s | 3,053 / 34,106 | $0.345 |
-| claude-sonnet-5 | 14/14 | 1 | 0.989 | 3.0 s | 3,934 / 3,104 | $0.058 |
-| gpt-4o | 14/14 | 1 | 0.978 | 1.5 s | 2,723 / 1,707 | $0.024 |
-| ollama:qwen2.5-coder:7b | 11/14 | 1 | 0.859 | 14.6 s | 2,743 / 1,687 | $0 (local) |
+| gemini-2.5-pro | 14/14 | 3 | 0.988 | 16.3 s | 9,159 / 96,660 | $0.978 |
+| claude-sonnet-5 | 14/14 | 3 | 0.986 | 4.0 s | 12,978 / 11,091 | $0.205 |
+| gpt-4o | 14/14 | 3 | 0.980 | 1.5 s | 8,883 / 4,520 | $0.067 |
+| claude-opus-4-8 | 13/14 | 3 | 0.961 | 3.3 s | 12,978 / 7,334 | $0.248 |
+| ollama:qwen2.5-coder:7b | 11/14 | 3 | 0.765 | 12.7 s | 8,943 / 4,918 | $0 (local) |
 
 *A task passes when at least half its generations pass; score and latency average over all generations.*
 *Cost covers every generation, at list per-MTok rates from [`pricing.json`](pricing.json) (as of 2026-07-05).*
 
-The four frontier models all pass 14/14, so the ranking comes down to idiom-judge decimals —
-but cost and latency separate them sharply: Gemini 2.5 Pro burned 34K output tokens (mostly
-reasoning) for the same pass rate gpt-4o achieved with 1.7K, making it 4–14× the price per run.
+Three frontier models pass 14/14; cost and latency separate them sharply. Gemini 2.5 Pro tops
+the score column but spends ~97K output tokens (mostly reasoning) — ~15× gpt-4o's price for
+roughly the same pass rate. Claude Opus 4.8 dropped `generics/generic-sum` by calling
+`ArgumentNullException.ThrowIfNull` without `using System;` in 2 of 3 generations — candidates
+compile without implicit usings, and the contract requires every using directive. That's the
+multi-generation protocol working as intended: the earlier single-generation run happened to
+sample the one generation where the directive was present.
 
 ### Mean score by category
 
-| Category | claude-opus-4-8 | gemini-2.5-pro | claude-sonnet-5 | gpt-4o | ollama:qwen2.5-coder:7b |
+| Category | gemini-2.5-pro | claude-sonnet-5 | gpt-4o | claude-opus-4-8 | ollama:qwen2.5-coder:7b |
 |---|---|---|---|---|---|
-| async | 0.97 | 0.99 | 0.96 | 0.96 | 1.00 |
-| concurrency | 0.99 | 0.99 | 0.99 | 0.99 | 0.54 |
-| generics | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
-| idiom | 1.00 | 1.00 | 1.00 | 1.00 | 0.96 |
-| linq | 1.00 | 0.99 | 0.96 | 0.82 | 1.00 |
-| nullability | 0.99 | 0.99 | 0.99 | 0.99 | 0.93 |
-| refactoring | 1.00 | 0.99 | 1.00 | 1.00 | 0.72 |
-| spans | 0.99 | 0.99 | 0.99 | 0.98 | 0.87 |
+| async | 0.97 | 0.91 | 0.90 | 0.98 | 0.35 |
+| concurrency | 0.99 | 0.99 | 0.98 | 1.00 | 0.69 |
+| generics | 0.98 | 1.00 | 0.99 | 0.76 | 0.99 |
+| idiom | 1.00 | 1.00 | 1.00 | 1.00 | 0.91 |
+| linq | 0.98 | 0.98 | 0.96 | 0.99 | 0.75 |
+| nullability | 0.98 | 0.99 | 0.98 | 1.00 | 0.98 |
+| refactoring | 1.00 | 1.00 | 1.00 | 1.00 | 0.52 |
+| spans | 0.99 | 0.98 | 0.98 | 0.99 | 0.72 |
 
 ### Failed tasks
 
-- ollama:qwen2.5-coder:7b: concurrency/channel-sum (0/1 generations passed, mean score 0.23)
-- ollama:qwen2.5-coder:7b: refactoring/loop-to-linq (0/1 generations passed, mean score 0.77)
-- ollama:qwen2.5-coder:7b: refactoring/modernize-describe (0/1 generations passed, mean score 0.68)
+- claude-opus-4-8: generics/generic-sum (1/3 generations passed, mean score 0.53)
+- ollama:qwen2.5-coder:7b: async/cancellation-propagation (1/3 generations passed, mean score 0.35)
+- ollama:qwen2.5-coder:7b: refactoring/modernize-describe (1/3 generations passed, mean score 0.27)
+- ollama:qwen2.5-coder:7b: spans/sum-csv-ints (1/3 generations passed, mean score 0.45)
 
 ## Run it yourself
 
