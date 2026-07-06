@@ -6,7 +6,9 @@ namespace SharpBench.Runner;
 
 /// <summary>One line of a results JSONL file, as written by <see cref="BenchmarkRun"/> —
 /// one generation of one task. <paramref name="Generation"/> defaults to 1 so files
-/// written before multi-generation runs still load.</summary>
+/// written before multi-generation runs still load. <paramref name="Output"/> is the
+/// candidate's code, present so <see cref="Rejudge"/> can re-score committed generations;
+/// null when a pre-output file omits it.</summary>
 public sealed record ResultLine(
     string Model,
     string Category,
@@ -17,7 +19,8 @@ public sealed record ResultLine(
     long? SutInputTokens,
     long? SutOutputTokens,
     DateTime TimestampUtc,
-    int Generation = 1);
+    int Generation = 1,
+    string? Output = null);
 
 /// <summary>Per-model list price in dollars per million tokens, one entry of <see cref="PricingFile"/>.</summary>
 public sealed record ModelPricing(decimal Input, decimal Output, string? Note);
@@ -149,7 +152,7 @@ public static class Leaderboard
 
     /// <summary>Reads every *.jsonl under <paramref name="resultsRoot"/> (recursively, so monthly
     /// subfolders are picked up) and keeps the latest line per (model, category, task, generation).</summary>
-    private static IReadOnlyList<ResultLine> LoadLatest(string resultsRoot)
+    internal static IReadOnlyList<ResultLine> LoadLatest(string resultsRoot)
     {
         if (!Directory.Exists(resultsRoot))
             return [];

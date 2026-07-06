@@ -6,6 +6,8 @@ using SharpBench.Runner;
 //   dotnet run -- --model <label>       -- run the benchmark for one model
 //   dotnet run -- --model <label> --runs <n>  -- override generations per task (default 3)
 //   dotnet run -- --report              -- markdown leaderboard from results/ (no keys needed)
+//   dotnet run -- --rejudge <label>     -- re-score committed generations with a different
+//                                          idiom judge; writes results-rejudge/<label>/
 //
 // Model labels: bare frontier IDs (claude-sonnet-5, gpt-4o, gemini-2.5-pro), an
 // explicit provider:model prefix (openai:gpt-4o), or ollama:<model>. Keys come from
@@ -20,6 +22,35 @@ if (args.Contains("--report"))
 {
     Console.WriteLine(Leaderboard.Render(
         Path.Combine(repoRoot, "results"), tasks, Path.Combine(repoRoot, "pricing.json")));
+    return;
+}
+
+var rejudgeIndex = Array.IndexOf(args, "--rejudge");
+if (rejudgeIndex >= 0)
+{
+    if (rejudgeIndex + 1 >= args.Length)
+    {
+        Console.Error.WriteLine("--rejudge needs a judge model label (e.g. --rejudge gpt-4o).");
+        return;
+    }
+
+    // The judge label comes from the command line, not SHARPBENCH_JUDGE_MODEL: the output
+    // folder is named after the judge, so provenance must be explicit, not ambient.
+    var rejudgeLabel = args[rejudgeIndex + 1];
+    var rejudgeJudge = new NetEval.ChatClientJudge(ChatClientFactory.Create(rejudgeLabel));
+    var rejudgeRoot = Path.Combine(repoRoot, "results-rejudge", Rejudge.FileLabel(rejudgeLabel));
+
+    await Rejudge.RunAsync(
+        task => BenchmarkRun.CreateJudge(task, rejudgeJudge),
+        tasks, Path.Combine(repoRoot, "results"), rejudgeRoot);
+
+    Console.WriteLine();
+    Console.WriteLine($"# Rejudged leaderboard — idiom judge: {rejudgeLabel}");
+    Console.WriteLine();
+    Console.WriteLine(Leaderboard.Render(rejudgeRoot, tasks, Path.Combine(repoRoot, "pricing.json")));
+    Console.WriteLine("# Original leaderboard, for comparison");
+    Console.WriteLine();
+    Console.WriteLine(Leaderboard.Render(Path.Combine(repoRoot, "results"), tasks, Path.Combine(repoRoot, "pricing.json")));
     return;
 }
 
@@ -56,9 +87,7 @@ var idiomJudge = new NetEval.ChatClientJudge(CreateChatClient("judge"));
 
 var resultsDir = Path.Combine(repoRoot, "results", DateTime.UtcNow.ToString("yyyy-MM"));
 Directory.CreateDirectory(resultsDir);
-// Model labels can contain characters that are invalid in file names (e.g. "ollama:qwen2.5-coder:7b").
-var fileLabel = string.Join("-", modelLabel.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
-var resultsPath = Path.Combine(resultsDir, $"{fileLabel}.jsonl");
+var resultsPath = Path.Combine(resultsDir, $"{Rejudge.FileLabel(modelLabel)}.jsonl");
 
 await BenchmarkRun.RunModelAsync(modelLabel, contestant, idiomJudge, tasks, resultsPath, runs);
 Console.WriteLine($"\nDone. Raw results: {resultsPath}");

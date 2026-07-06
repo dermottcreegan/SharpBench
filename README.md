@@ -72,6 +72,7 @@ dotnet run --project src/SharpBench.Runner                    # list the task in
 dotnet run --project src/SharpBench.Runner -- --model <label> # benchmark one model (3 generations/task)
 dotnet run --project src/SharpBench.Runner -- --model <label> --runs 1  # cheap single-generation smoke run
 dotnet run --project src/SharpBench.Runner -- --report        # markdown leaderboard (no keys needed)
+dotnet run --project src/SharpBench.Runner -- --rejudge <label>  # re-score committed generations with a different idiom judge
 ```
 
 `<label>` selects the provider. Frontier model IDs are self-identifying; Ollama uses an explicit prefix:
@@ -88,6 +89,10 @@ An explicit `provider:model` prefix (`openai:gpt-4o`, `claude:…`, `gemini:…`
 
 The idiom judge is one fixed model for every contestant, defaulting to `claude-opus-4-8`
 (override with `SHARPBENCH_JUDGE_MODEL`; e.g. an `ollama:` model for offline smoke runs).
+To measure how much the judge's identity matters, `--rejudge <label>` re-scores the
+committed generations with a different idiom judge — no new generations, so any leaderboard
+delta is attributable to the judge alone — and writes a parallel result set under
+`results-rejudge/<label>/`.
 
 Each candidate's code is compiled and executed in a disposable `SharpBench.Sandbox` child process
 with a hard wall-clock timeout, so a runaway or hostile answer can't wedge the harness (see

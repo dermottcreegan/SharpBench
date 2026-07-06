@@ -27,6 +27,14 @@ public static class BenchmarkRun
     /// </summary>
     private const double PassThreshold = 0.7;
 
+    /// <summary>The published scoring configuration, shared by live runs and
+    /// <see cref="Rejudge"/> so a rejudged score differs only by the idiom judge's identity.</summary>
+    internal static CompositeJudge CreateJudge(BenchTask task, IJudge idiomJudge) =>
+        new(
+            PassThreshold,
+            (new RoslynTestJudge(task.HiddenTestsSource), FunctionalWeight, Required: true),
+            (idiomJudge, IdiomWeight, Required: false));
+
     /// <param name="modelLabel">Human-readable model name for the results file (e.g. "claude-sonnet-5").</param>
     /// <param name="contestant">Chat client for the model under test.</param>
     /// <param name="idiomJudge">LLM judge for the style layer — one fixed judge model for all contestants.</param>
@@ -44,10 +52,7 @@ public static class BenchmarkRun
     {
         foreach (var task in tasks)
         {
-            var judge = new CompositeJudge(
-                PassThreshold,
-                (new RoslynTestJudge(task.HiddenTestsSource), FunctionalWeight, Required: true),
-                (idiomJudge, IdiomWeight, Required: false));
+            var judge = CreateJudge(task, idiomJudge);
 
             for (var generation = 1; generation <= runs; generation++)
             {
@@ -120,23 +125,39 @@ public static class BenchmarkRun
         UsageDetails? sutUsage,
         CancellationToken ct)
     {
-        var line = JsonSerializer.Serialize(new
+        var line = SerializeResultLine(
+            modelLabel, task, generation, result.Verdict,
+            (int)result.SutLatency.TotalMilliseconds,
+            sutUsage?.InputTokenCount, sutUsage?.OutputTokenCount, result.Output);
+        await File.AppendAllTextAsync(resultsPath, line + Environment.NewLine, ct);
+    }
+
+    /// <summary>The one place the results JSONL schema is written — live runs and
+    /// <see cref="Rejudge"/> both serialize through here so their files stay interchangeable.</summary>
+    internal static string SerializeResultLine(
+        string modelLabel,
+        BenchTask task,
+        int generation,
+        JudgeVerdict verdict,
+        int sutLatencyMs,
+        long? sutInputTokens,
+        long? sutOutputTokens,
+        string output) =>
+        JsonSerializer.Serialize(new
         {
             model = modelLabel,
             category = task.Category,
             task = task.Id,
             generation,
-            passed = result.Verdict.Passed,
-            score = result.Verdict.Score,
-            reasoning = result.Verdict.Reasoning,
-            sutLatencyMs = (int)result.SutLatency.TotalMilliseconds,
+            passed = verdict.Passed,
+            score = verdict.Score,
+            reasoning = verdict.Reasoning,
+            sutLatencyMs,
             // Token counts, not dollars: pricing changes; the results post can price
             // them at publication time. Null when the provider reports no usage.
-            sutInputTokens = sutUsage?.InputTokenCount,
-            sutOutputTokens = sutUsage?.OutputTokenCount,
-            output = result.Output,
+            sutInputTokens,
+            sutOutputTokens,
+            output,
             timestampUtc = DateTime.UtcNow,
         });
-        await File.AppendAllTextAsync(resultsPath, line + Environment.NewLine, ct);
-    }
 }
