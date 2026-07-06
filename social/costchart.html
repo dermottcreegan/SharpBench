@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 800px; height: 450px; overflow: hidden; }
+  body {
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --series-1: #2a78d6;
+    background: var(--surface-1);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--text-primary);
+  }
+  .card { padding: 40px 48px 32px; height: 100%; display: flex; flex-direction: column; }
+  h1 { font-size: 29px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { font-size: 13.5px; color: var(--text-secondary); margin-top: 7px; }
+  .takeaway { font-size: 13.5px; color: var(--text-secondary); margin-top: 3px; }
+  .chart { margin-top: 30px; display: flex; flex-direction: column; gap: 22px; }
+  .row { display: flex; align-items: center; }
+  .name {
+    width: 190px; flex: none; text-align: right; padding-right: 16px;
+    font-size: 15px; font-weight: 550; color: var(--text-primary);
+  }
+  .name small { display: block; font-weight: 400; font-size: 11.5px; color: var(--text-muted); }
+  .track { flex: 1; position: relative; height: 20px; }
+  .bar {
+    position: absolute; left: 0; top: 0; height: 20px;
+    background: var(--series-1);
+    border-radius: 0 4px 4px 0;
+  }
+  .val {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    font-size: 15px; font-variant-numeric: tabular-nums;
+    color: var(--text-primary); white-space: nowrap;
+  }
+  .val small { font-size: 12px; color: var(--text-muted); font-variant-numeric: normal; }
+  .footer {
+    margin-top: auto; display: flex; justify-content: space-between;
+    font-size: 12.5px; color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Cost per full benchmark run</h1>
+  <div class="sub">SharpBench &middot; same 14 C# tasks &times; 3 generations for every model &middot; list per-MTok pricing, 2026-07-05</div>
+  <div class="takeaway">Gemini 2.5 Pro outscores gpt-4o by 0.008 &mdash; at ~15&times; the price (~97K output tokens/run, mostly reasoning).</div>
+  <div class="chart">
+    <!-- scale: $1.00 = 470px -->
+    <div class="row">
+      <div class="name">gemini-2.5-pro</div>
+      <div class="track"><div class="bar" style="width: 460px;"></div><div class="val" style="left: 472px;">$0.98</div></div>
+    </div>
+    <div class="row">
+      <div class="name">claude-opus-4-8</div>
+      <div class="track"><div class="bar" style="width: 117px;"></div><div class="val" style="left: 129px;">$0.25</div></div>
+    </div>
+    <div class="row">
+      <div class="name">claude-sonnet-5</div>
+      <div class="track"><div class="bar" style="width: 96px;"></div><div class="val" style="left: 108px;">$0.21</div></div>
+    </div>
+    <div class="row">
+      <div class="name">gpt-4o</div>
+      <div class="track"><div class="bar" style="width: 31px;"></div><div class="val" style="left: 43px;">$0.07</div></div>
+    </div>
+    <div class="row">
+      <div class="name">qwen2.5-coder:7b<small>running locally</small></div>
+      <div class="track"><div class="val" style="left: 0;">$0 <small>&mdash; free, passes 11/14</small></div></div>
+    </div>
+  </div>
+  <div class="footer">
+    <span>Pass rates: 14/14 except claude-opus-4-8 (13) and qwen2.5-coder (11)</span>
+    <span>github.com/dermottcreegan/SharpBench</span>
+  </div>
+</div>
+</body>
+</html>
